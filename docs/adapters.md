@@ -2,6 +2,8 @@
 
 single-thread flags a window when its agent needs you: a permission prompt, a question, a plan waiting for approval, or a finished turn. It learns this from the agent's own hooks. Each hook runs `hooks/single-thread-hook <agent> <event>` with the hook's JSON payload on stdin. The script writes one small JSON file per session into `~/Library/Application Support/single-thread/sessions/` (override with `SINGLE_THREAD_STATE_DIR`), and the app watches that folder.
 
+When a session ends, the script deletes its state file and writes an empty `<session_id>.ended` marker in the same folder. A hook that was still running when the session ended sees the marker and writes nothing, so the session stays gone; `SessionStart` removes the marker. The app ignores ended sessions and deletes markers older than 24 hours.
+
 The script stores the session id, working directory, event name, notification type and message, tool name, tty, agent PID, and the app that launched the terminal (`__CFBundleIdentifier`). It does not store prompts, replies, or tool input. It prints nothing and exits 0 on every path, so it cannot block or alter the agent.
 
 | Agent | Mechanism | Status |
@@ -24,7 +26,7 @@ Source: [Hooks reference](https://code.claude.com/docs/en/hooks), [Hooks guide](
 | `Notification` | | `permission_prompt` needs permission, `elicitation_dialog` question, `idle_prompt` turn finished; other types ignored |
 | `Stop` | | turn finished |
 | `StopFailure` | | turn finished (the turn ended on an API error) |
-| `SessionEnd` | | state file deleted |
+| `SessionEnd` | | state file deleted, `.ended` marker written |
 
 Why these events:
 
@@ -68,7 +70,7 @@ What the docs say:
 | `postToolUse`, `postToolUseFailure` | working |
 | `notification` | `permission_prompt` needs permission, `elicitation_dialog` question; other types ignored |
 | `agentStop` | turn finished |
-| `sessionEnd` | state file deleted |
+| `sessionEnd` | state file deleted, `.ended` marker written |
 
 Install:
 

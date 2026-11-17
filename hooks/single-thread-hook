@@ -10,6 +10,8 @@
 # (default: ~/Library/Application Support/single-thread/sessions).
 # It stores the session id, working directory, event, notification type and
 # message, tool name, tty, agent PID, and the app that launched the terminal.
+# On SessionEnd it deletes that file and leaves an empty <session_id>.ended
+# marker, so a late hook from the dead session cannot bring it back.
 # It never stores your prompts or the agent's replies.
 #
 # It prints nothing and always exits 0: stdout from some hook events is fed
