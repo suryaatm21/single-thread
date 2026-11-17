@@ -50,11 +50,20 @@ safe_id="$(printf '%s' "$session_id" | LC_ALL=C tr -cd 'A-Za-z0-9._-' | cut -c1-
 [ -n "$safe_id" ] || exit 0
 [ -n "$event" ] || event="$(field hook_event_name)"
 state_file="$state_dir/$agent-$safe_id.json"
+ended_marker="$state_dir/$safe_id.ended"
 
 case "$event" in
   SessionEnd | sessionEnd)
     rm -f "$state_file"
+    mkdir -p "$state_dir" 2>/dev/null && : >"$ended_marker" 2>/dev/null
     exit 0
+    ;;
+  SessionStart | sessionStart)
+    rm -f "$ended_marker"
+    ;;
+  *)
+    # A hook still running when the session ended must not bring it back.
+    [ ! -e "$ended_marker" ] || exit 0
     ;;
 esac
 

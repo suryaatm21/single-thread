@@ -40,7 +40,18 @@ final class SessionStore {
         let files = urls
             .filter { $0.pathExtension == "json" && !$0.lastPathComponent.hasPrefix(".") }
             .compactMap { try? Data(contentsOf: $0) }
-        let loaded = SessionStateLoader.sessions(from: files, now: Date(), isAlive: Self.isAlive)
+        let markers = urls.filter { $0.pathExtension == "ended" }
+        let cutoff = Date().addingTimeInterval(-24 * 60 * 60)
+        var ended = Set<String>()
+        for marker in markers {
+            let modified = (try? marker.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+            if let modified, modified < cutoff {
+                try? FileManager.default.removeItem(at: marker)
+            } else {
+                ended.insert(marker.deletingPathExtension().lastPathComponent)
+            }
+        }
+        let loaded = SessionStateLoader.sessions(from: files, now: Date(), endedSessionIDs: ended, isAlive: Self.isAlive)
         if loaded != sessions {
             sessions = loaded
             onChange?()

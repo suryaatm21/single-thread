@@ -190,7 +190,20 @@ struct HookScriptTests {
         defer { try? FileManager.default.removeItem(at: dir) }
         _ = try runHook(args: ["claude-code", "SessionStart"], payload: #"{"session_id":"s1"}"#, stateDir: dir)
         let run = try runHook(args: ["claude-code", "SessionEnd"], payload: #"{"session_id":"s1","reason":"other"}"#, stateDir: dir)
-        #expect(run.files.isEmpty)
+        #expect(run.files.map(\.lastPathComponent) == ["s1.ended"])
+    }
+
+    @Test("A late Notification after SessionEnd stays cleared; a new SessionStart revives the id")
+    func lateNotificationAfterEnd() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        _ = try runHook(args: ["claude-code", "SessionStart"], payload: #"{"session_id":"s1"}"#, stateDir: dir)
+        _ = try runHook(args: ["claude-code", "SessionEnd"], payload: #"{"session_id":"s1"}"#, stateDir: dir)
+        let late = try runHook(args: ["claude-code", "Notification"],
+                               payload: #"{"session_id":"s1","notification_type":"permission_prompt","message":"hi"}"#, stateDir: dir)
+        #expect(late.files.map(\.lastPathComponent) == ["s1.ended"])
+        let restarted = try runHook(args: ["claude-code", "SessionStart"], payload: #"{"session_id":"s1"}"#, stateDir: dir)
+        #expect(restarted.files.map(\.lastPathComponent) == ["claude-code-s1.json"])
     }
 
     @Test("Copilot payloads (camelCase) and its hook environment are recognised")

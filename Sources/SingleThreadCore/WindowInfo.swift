@@ -14,6 +14,7 @@ public struct WindowInfo: Equatable, Sendable {
     public var documentPath: String?
     /// Frame in CoreGraphics global space (top-left origin, y down).
     public var frame: CGRect
+    // Inert until WindowScanner fills window ttys (README follow-up).
     /// Terminal devices shown in this window's tabs, when the terminal reports them.
     public var ttys: [String]
 

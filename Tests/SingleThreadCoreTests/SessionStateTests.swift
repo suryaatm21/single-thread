@@ -127,6 +127,17 @@ struct SessionStateTests {
         #expect(sessions.first?.activity == .finished)
     }
 
+    @Test("Loader ignores sessions with an ended marker")
+    func loaderEndedMarker() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let files = [
+            Self.file(event: "Notification", ts: 1_800_000_000 - 5, sessionID: "gone", pid: 0),
+            Self.file(event: "Stop", ts: 1_800_000_000 - 5, sessionID: "kept", pid: 0),
+        ]
+        let sessions = SessionStateLoader.sessions(from: files, now: now, endedSessionIDs: ["gone"], isAlive: { _ in true })
+        #expect(sessions.map(\.sessionID) == ["kept"])
+    }
+
     @Test("State directory honours the environment override")
     func stateDirectory() {
         let custom = StatePaths.sessionsDirectory(environment: ["SINGLE_THREAD_STATE_DIR": "/tmp/st"], homeDirectory: "/Users/x")

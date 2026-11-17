@@ -17,6 +17,7 @@ public enum SessionMatcher {
     public static let minimumScore = 100
 
     public enum Weight {
+        // Inert until WindowScanner fills window ttys (README follow-up).
         public static let ttyMatch = 1000
         public static let documentEqualsCwd = 300
         public static let titleContainsCwdPath = 200
