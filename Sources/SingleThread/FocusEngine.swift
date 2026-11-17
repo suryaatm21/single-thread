@@ -127,6 +127,27 @@ final class FocusEngine {
             || next.supportedWindowCount != snapshot.supportedWindowCount
         snapshot = next
         if changed { onSnapshot?(next) }
+        if debug { log(scan: scan, clear: clear, specs: specs, match: match, flagged: flagged) }
+    }
+
+    // MARK: Debug log (SINGLE_THREAD_DEBUG=1 → stderr, one line per change)
+
+    private let debug = ProcessInfo.processInfo.environment["SINGLE_THREAD_DEBUG"] == "1"
+    private var lastLogLine = ""
+
+    private func log(scan: WindowScanner.Scan, clear: UInt32?, specs: [OverlaySpec],
+                     match: SessionMatcher.Result, flagged: Set<String>) {
+        let windows = scan.windows.map { w -> String in
+            let session = match.sessionsByWindow[w.id].map { " session=\($0.cwdName ?? $0.sessionID):\($0.activity.rawValue)" } ?? ""
+            let flag = match.sessionsByWindow[w.id].map { flagged.contains($0.id) ? " NEEDS-YOU" : "" } ?? ""
+            return "\(w.id)[\(w.appName) title=\(w.title ?? "-") doc=\(w.documentPath ?? "-")\(session)\(flag)]"
+        }
+        let line = "ax=\(AX.isTrusted) clear=\(clear.map(String.init) ?? "none") overlays=\(specs.map(\.windowID)) "
+            + "state=[\(overlays.debugDescription)] "
+            + "unmatched=\(match.unmatched.map { $0.cwdName ?? $0.sessionID }) windows=\(windows)"
+        guard line != lastLogLine else { return }
+        lastLogLine = line
+        FileHandle.standardError.write(Data(("[single-thread] " + line + "\n").utf8))
     }
 
     /// Brings a session's window to the front.

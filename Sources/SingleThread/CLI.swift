@@ -1,21 +1,23 @@
 import Foundation
 import SingleThreadCore
 
-/// Finds the hook script: next to the app inside its bundle, or in the
-/// repository checkout when run with `swift run` from the package root.
+/// Finds the hook script that installed hook configs will run.
+///
+/// Only two sources are trusted: an explicit `--hook-script` path, or the copy
+/// inside this app's bundle. There is deliberately no search of the current
+/// directory: the installed config runs the script on every agent event, so
+/// picking one up from wherever the command happened to run would let any
+/// checkout plant code there.
 enum HookScriptLocator {
     static func locate(override: String? = nil) -> String? {
-        var candidates: [String] = []
-        if let override { candidates.append(override) }
-        if let bundled = Bundle.main.url(forResource: "single-thread-hook", withExtension: nil) {
-            candidates.append(bundled.path)
+        let candidate: String?
+        if let override {
+            candidate = URL(fileURLWithPath: override).standardizedFileURL.path
+        } else {
+            candidate = Bundle.main.url(forResource: "single-thread-hook", withExtension: nil)?.path
         }
-        candidates.append(FileManager.default.currentDirectoryPath + "/hooks/single-thread-hook")
-        for path in candidates {
-            let absolute = URL(fileURLWithPath: path).standardizedFileURL.path
-            if FileManager.default.isExecutableFile(atPath: absolute) { return absolute }
-        }
-        return nil
+        guard let candidate, FileManager.default.isExecutableFile(atPath: candidate) else { return nil }
+        return candidate
     }
 }
 
@@ -40,8 +42,9 @@ enum CLI {
       SingleThread status                           Show permission status.
 
     Options:
-      --hook-script <path>   Hook script to reference (default: the bundled copy,
-                             or ./hooks/single-thread-hook).
+      --hook-script <path>   Hook script to reference. Defaults to the copy inside
+                             SingleThread.app; required when running outside the
+                             bundle (e.g. with `swift run`).
 
     Nothing is written unless you pass an explicit --settings or --hooks-file path.
     """
@@ -102,7 +105,9 @@ enum CLI {
         }
 
         guard let script = HookScriptLocator.locate(override: options["--hook-script"]) else {
-            printError("cannot find an executable hook script; pass --hook-script <path>")
+            printError(options["--hook-script"] == nil
+                ? "not running from SingleThread.app; pass --hook-script <absolute path to hooks/single-thread-hook>"
+                : "\(options["--hook-script"]!) is not an executable file")
             return 66
         }
 

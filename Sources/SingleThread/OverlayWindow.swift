@@ -47,7 +47,8 @@ final class OverlayContentView: NSView {
     private let subtitleField = OverlayContentView.makeField(weight: .regular)
     private let statusField = OverlayContentView.makeField(weight: .medium)
     private let stack = NSStackView()
-    private let borderLayer = CALayer()
+    /// Topmost subview, so the blur and dim views never paint over the border.
+    private let borderView = NSView()
     private var lastSpec: OverlaySpec?
 
     override init(frame: NSRect) {
@@ -70,7 +71,8 @@ final class OverlayContentView: NSView {
         addSubview(dimView)
 
         labelBox.wantsLayer = true
-        labelBox.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.35).cgColor
+        // Opaque enough to stay readable in dim-only mode, where text behind is sharp.
+        labelBox.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.6).cgColor
         labelBox.layer?.cornerRadius = 14
         labelBox.translatesAutoresizingMaskIntoConstraints = false
         addSubview(labelBox)
@@ -95,11 +97,13 @@ final class OverlayContentView: NSView {
             stack.bottomAnchor.constraint(equalTo: labelBox.bottomAnchor, constant: -14),
         ])
 
-        borderLayer.borderColor = Self.amber.cgColor
-        borderLayer.cornerRadius = Self.cornerRadius
-        borderLayer.borderWidth = 4
-        borderLayer.isHidden = true
-        layer?.addSublayer(borderLayer)
+        borderView.wantsLayer = true
+        borderView.layer?.borderColor = Self.amber.cgColor
+        borderView.layer?.cornerRadius = Self.cornerRadius
+        borderView.layer?.borderWidth = 4
+        borderView.autoresizingMask = [.width, .height]
+        borderView.isHidden = true
+        addSubview(borderView)
     }
 
     @available(*, unavailable)
@@ -107,10 +111,6 @@ final class OverlayContentView: NSView {
 
     override func layout() {
         super.layout()
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        borderLayer.frame = bounds
-        CATransaction.commit()
         updateFonts()
     }
 
@@ -141,8 +141,8 @@ final class OverlayContentView: NSView {
     }
 
     private func setAttention(_ on: Bool) {
-        borderLayer.isHidden = !on
-        borderLayer.removeAllAnimations()
+        borderView.isHidden = !on
+        borderView.layer?.removeAllAnimations()
         guard on else { return }
         let pulse = CABasicAnimation(keyPath: "opacity")
         pulse.fromValue = 1.0
@@ -151,7 +151,7 @@ final class OverlayContentView: NSView {
         pulse.autoreverses = true
         pulse.repeatCount = .infinity
         pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        borderLayer.add(pulse, forKey: "pulse")
+        borderView.layer?.add(pulse, forKey: "pulse")
     }
 
     /// Scales the label with the window so small windows stay legible.
