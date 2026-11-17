@@ -32,8 +32,8 @@ payload="$(cat)"
 # field KEY [KEY...]: first non-empty top-level string among KEYs, via plutil (ships with macOS).
 field() {
   for key in "$@"; do
-    value="$(printf '%s' "$payload" | /usr/bin/plutil -extract "$key" raw -o - - 2>/dev/null)"
-    if [ -n "$value" ]; then
+    # Some plutil versions print their error text on stdout, so trust the value only on success.
+    if value="$(printf '%s' "$payload" | /usr/bin/plutil -extract "$key" raw -o - - 2>/dev/null)" && [ -n "$value" ]; then
       printf '%s' "$value"
       return 0
     fi
