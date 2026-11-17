@@ -1,0 +1,121 @@
+#!/bin/sh
+# single-thread-hook: records an agent session's state for the single-thread app.
+#
+# Usage, from an agent's hook config, with the hook's JSON payload on stdin:
+#   single-thread-hook <agent> <event>
+#     agent  claude-code | copilot-cli
+#     event  the hook event name, e.g. Stop, PermissionRequest, agentStop
+#
+# Writes one small JSON file per session into $SINGLE_THREAD_STATE_DIR
+# (default: ~/Library/Application Support/single-thread/sessions).
+# It stores the session id, working directory, event, notification type and
+# message, tool name, tty, agent PID, and the app that launched the terminal.
+# It never stores your prompts or the agent's replies.
+#
+# It prints nothing and always exits 0: stdout from some hook events is fed
+# back to the agent, and a failing hook must never get in the agent's way.
+
+set -f # no globbing when splitting ps output
+
+agent="${1:-claude-code}"
+event="${2:-}"
+# Copilot CLI also runs hooks declared in .claude/settings*.json; label those correctly.
+if [ -n "${COPILOT_HOOK_DEPTH:-}" ]; then agent="copilot-cli"; fi
+
+state_dir="${SINGLE_THREAD_STATE_DIR:-$HOME/Library/Application Support/single-thread/sessions}"
+
+payload="$(cat)"
+[ -n "$payload" ] || exit 0
+
+# field KEY [KEY...]: first non-empty top-level string among KEYs, via plutil (ships with macOS).
+field() {
+  for key in "$@"; do
+    value="$(printf '%s' "$payload" | /usr/bin/plutil -extract "$key" raw -o - - 2>/dev/null)"
+    if [ -n "$value" ]; then
+      printf '%s' "$value"
+      return 0
+    fi
+  done
+  return 0
+}
+
+# json VALUE: escape for a JSON string; control characters are dropped.
+json() {
+  printf '%s' "$1" | LC_ALL=C sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | LC_ALL=C tr -d '\000-\037'
+}
+
+session_id="$(field session_id sessionId)"
+[ -n "$session_id" ] || exit 0
+safe_id="$(printf '%s' "$session_id" | LC_ALL=C tr -cd 'A-Za-z0-9._-' | cut -c1-128)"
+[ -n "$safe_id" ] || exit 0
+[ -n "$event" ] || event="$(field hook_event_name)"
+state_file="$state_dir/$agent-$safe_id.json"
+
+case "$event" in
+  SessionEnd | sessionEnd)
+    rm -f "$state_file"
+    exit 0
+    ;;
+esac
+
+notification_type=""
+message=""
+case "$event" in
+  Notification | notification)
+    notification_type="$(field notification_type notificationType)"
+    case "$notification_type" in
+      permission_prompt | idle_prompt | elicitation_dialog | elicitation_url_dialog | agent_needs_input) ;;
+      # Auth, shell-completion and other notices say nothing about whether you are needed.
+      *) exit 0 ;;
+    esac
+    message="$(field message)"
+    ;;
+esac
+
+tool_name=""
+case "$event" in
+  PreToolUse | PermissionRequest | preToolUse | permissionRequest)
+    tool_name="$(field tool_name toolName)"
+    ;;
+esac
+
+cwd="$(field cwd)"
+
+# Hooks run without a controlling terminal, so walk up the process tree: the
+# first ancestor that is not a shell is the agent, and the first tty found is
+# the terminal the agent runs in.
+tty=""
+agent_pid=""
+pid="$PPID"
+hops=0
+while [ "$hops" -lt 12 ] && [ -n "$pid" ] && [ "$pid" -gt 1 ] 2>/dev/null; do
+  info="$(ps -o ppid= -o tty= -o comm= -p "$pid" 2>/dev/null)"
+  [ -n "$info" ] || break
+  # shellcheck disable=SC2086 # word splitting is intended here
+  set -- $info
+  parent="$1"
+  term="$2"
+  shift 2
+  name="$*"
+  name="${name##*/}"
+  if [ -z "$tty" ] && [ -n "$term" ] && [ "$term" != "??" ]; then tty="$term"; fi
+  case "$name" in
+    sh | -sh | bash | -bash | zsh | -zsh | dash | fish | env | timeout) ;;
+    *) [ -n "$agent_pid" ] || agent_pid="$pid" ;;
+  esac
+  if [ -n "$agent_pid" ] && [ -n "$tty" ]; then break; fi
+  pid="$parent"
+  hops=$((hops + 1))
+done
+
+if [ -n "${TMUX:-}" ]; then in_tmux=true; else in_tmux=false; fi
+
+mkdir -p "$state_dir" 2>/dev/null || exit 0
+tmp="$state_dir/.$agent-$safe_id.$$.tmp"
+printf '{"v":1,"agent":"%s","event":"%s","ts":%s,"session_id":"%s","cwd":"%s","tty":"%s","pid":%s,"host_bundle_id":"%s","term_program":"%s","tmux":%s,"notification_type":"%s","tool_name":"%s","message":"%s"}\n' \
+  "$(json "$agent")" "$(json "$event")" "$(date +%s)" "$(json "$session_id")" "$(json "$cwd")" \
+  "$(json "$tty")" "${agent_pid:-0}" "$(json "${__CFBundleIdentifier:-}")" "$(json "${TERM_PROGRAM:-}")" \
+  "$in_tmux" "$(json "$notification_type")" "$(json "$tool_name")" "$(json "$message")" \
+  >"$tmp" 2>/dev/null && mv -f "$tmp" "$state_file" 2>/dev/null
+rm -f "$tmp" 2>/dev/null
+exit 0
