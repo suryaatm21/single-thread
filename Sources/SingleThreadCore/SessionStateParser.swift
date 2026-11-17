@@ -114,17 +114,17 @@ public enum SessionStateParser {
 
 /// Turns the files in the state directory into the live session list.
 public enum SessionStateLoader {
+    /// The id as the hook script writes it into file names.
+    public static func safeFileID(_ id: String) -> String {
+        String(id.unicodeScalars.filter { $0.isASCII && ($0.properties.isAlphabetic || ("0"..."9").contains(Character($0)) || "._-".unicodeScalars.contains($0)) }.prefix(128).map(Character.init))
+    }
+
     /// - Parameters:
     ///   - files: raw contents of each `*.json` state file.
     ///   - endedSessionIDs: file-safe ids (see `safeFileID`) from `<id>.ended` markers; those sessions are dropped.
     ///   - maxAgeWithoutPID: sessions with no recorded PID expire after this long.
     ///   - isAlive: liveness check for a PID; sessions whose agent exited are dropped.
     /// - Returns: live sessions, newest first, one per session id.
-    /// The id as the hook script writes it into file names.
-    public static func safeFileID(_ id: String) -> String {
-        String(id.unicodeScalars.filter { $0.isASCII && ($0.properties.isAlphabetic || ("0"..."9").contains(Character($0)) || "._-".unicodeScalars.contains($0)) }.prefix(128).map(Character.init))
-    }
-
     public static func sessions(
         from files: [Data],
         now: Date,
