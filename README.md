@@ -110,13 +110,15 @@ To use another identity, set `SINGLE_THREAD_SIGN_IDENTITY="Your identity name"`.
 
 ## Blur strength
 
-The default blur is AppKit's public `NSVisualEffectView` (`.hudWindow` material, behind-window blending), and it is enough. We rendered Claude-Code-style output at 12, 13 and 14 pt in a terminal-like window, covered it with each overlay, captured the result, and ran Apple's Vision text recognizer on the capture:
+The default blur is AppKit's public `NSVisualEffectView` (`.hudWindow` material, behind-window blending), and it is enough. We rendered Claude-Code-style output at 12, 13 and 14 pt in a terminal-like window with a dark theme and again with a light theme. We covered it with the shipped overlay for each mode, captured the result, and ran Apple's Vision text recognizer on the capture:
 
-| Overlay | Words recognized (12 / 13 / 14 pt) |
-|---|---|
-| None | 100% / 100% / 100% |
-| Dim only | 100% / 100% / 100% |
-| Dim + public blur | 0% / 0% / 0% |
+| Overlay | Dark theme (12 / 13 / 14 pt) | Light theme (12 / 13 / 14 pt) |
+|---|---|---|
+| None | 100% / 100% / 100% | 100% / 100% / 100% |
+| Dim only (55% black) | 100% / 100% / 100% | 100% / 100% / 100% |
+| Dim + blur (25% black + public blur) | 0% / 0% / 0% | 0% / 0% / 0% |
+
+The numbers are the share of words the recognizer read back. Dim only keeps text readable on purpose. On a light theme the blur turns the window a flat mid-gray.
 
 The public blur leaves no readable text, so single-thread does not use the private `CGSSetWindowBackgroundBlurRadius` call. That keeps the app on public drawing APIs. The one private call in the app is `_AXUIElementGetWindow`, which maps an Accessibility window to its window number. The app resolves it at runtime and falls back to matching window frames if it is missing.
 
