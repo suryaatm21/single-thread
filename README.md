@@ -35,6 +35,8 @@ You need macOS 14 or later and a Swift 6 toolchain (Xcode or the Command Line To
      --settings /path/to/project/.claude/settings.local.json
    ```
    Use `--print` to see the JSON without writing anything. For Copilot CLI, see [docs/adapters.md](docs/adapters.md).
+
+   The installed hooks call the script inside `build/SingleThread.app` by absolute path. Build from a checkout you will keep. If you move or delete the app, run `install-hooks` again, or every agent event will show a hook error.
 6. Open two or three terminal windows, start an agent in each, and click between them.
 
 The menu also has *Copy Claude Code hook config*, which puts the `hooks` block on your clipboard.
@@ -61,12 +63,12 @@ agent hook ──▶ single-thread-hook ──▶ ~/Library/Application Support/
 terminal windows ──▶ window list + Accessibility ──▶ match session ↔ window ──▶ overlays
 ```
 
-1. Claude Code runs `hooks/single-thread-hook` on `PermissionRequest`, `PreToolUse` (questions and plans), `Notification`, `Stop`, `UserPromptSubmit`, `PostToolUse`, `SessionStart` and `SessionEnd`.
+1. Claude Code runs `hooks/single-thread-hook` on `PermissionRequest`, `PreToolUse` (questions and plans), `Notification`, `Stop`, `StopFailure`, `UserPromptSubmit`, `PostToolUse`, `PostToolUseFailure`, `SessionStart` and `SessionEnd`.
 2. The script writes the session's latest state to one JSON file: session id, working directory, event, tty, agent PID, and the app that launched the terminal. It never stores prompts or replies.
-3. The app matches each session to a window. It scores the launching app, the working directory a terminal window reports through Accessibility (when it reports one), the project name in the window title, and the tty.
-4. A session that needs input gets an amber border and a *Needs you* line on its overlay. Clicking into that window clears the flag. The flag returns when the agent needs you for something new.
+3. The app matches each session to a window. It scores the launching app, the working directory a terminal window reports through Accessibility (when it reports one), and the project name in the window title. The hook also records the session's tty. The matcher can use it, but the app does not yet read which ttys each window shows; that needs AppleScript access to Terminal and iTerm2 (Automation permission) and is a follow-up.
+4. A session that needs input gets an amber border and a *Needs you* line on its overlay. Working in that window, with its app in front, clears the flag. A window kept clear while you read in a browser does not count: if its agent finishes then, the window gets the amber border without the blur. The flag returns when the agent needs you for something new.
 
-Sessions the app cannot place on a window still appear in the menu, marked *window not identified*, and the menu-bar icon shows the count of sessions waiting on you.
+Sessions the app cannot place on a window still appear in the menu, marked *window not identified*, and the menu-bar icon shows the count of sessions waiting on you. That includes a session whose two best windows tie, such as the agent's window and a plain shell open in the same folder: the app leaves it unmatched rather than guess.
 
 [docs/adapters.md](docs/adapters.md) has the full event table, the Copilot CLI adapter, and links to both hook references.
 
@@ -89,9 +91,11 @@ One-time setup:
 
 1. Open **Keychain Access** and choose *Keychain Access > Certificate Assistant > Create a Certificate…*
 2. Name: `single-thread local signing`. Identity Type: *Self Signed Root*. Certificate Type: *Code Signing*. Click *Create*.
-3. Run `scripts/bundle.sh`. It finds the identity by name and signs with it.
+3. Run `scripts/bundle.sh`. It finds the identity by name and signs with it. The first run shows a keychain prompt asking to let `codesign` use the key; click *Always Allow*.
+4. If `codesign` rejects the identity as not trusted, double-click the certificate in Keychain Access, set *Trust > Code Signing* to *Always Trust*, and run `scripts/bundle.sh` again.
+5. Grant Accessibility once (see [Quick start](#quick-start)). Later rebuilds keep the grant.
 
-You do not need to change the certificate's trust settings. To use another identity, set `SINGLE_THREAD_SIGN_IDENTITY="Your identity name"`. Without an identity, `scripts/bundle.sh` signs ad hoc and prints a warning. You then need to toggle the Accessibility switch off and on after each build.
+To use another identity, set `SINGLE_THREAD_SIGN_IDENTITY="Your identity name"`. Without an identity, `scripts/bundle.sh` signs ad hoc and prints a warning. You then need to toggle the Accessibility switch off and on after each build.
 
 ## Configuration
 

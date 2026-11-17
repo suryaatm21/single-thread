@@ -28,6 +28,44 @@ struct HookConfigTests {
         #expect((handler["command"] as? String)?.hasSuffix("claude-code PreToolUse") == true)
     }
 
+    /// Every hook event name each agent documents. If the parser turns one of
+    /// these into a state, the installer must subscribe to it, or that state
+    /// can never arrive.
+    static let claudeDocumentedEvents = [
+        "SessionStart", "SessionEnd", "UserPromptSubmit", "UserPromptExpansion", "PreToolUse", "PostToolUse",
+        "PostToolUseFailure", "PermissionRequest", "Notification", "Stop", "StopFailure", "SubagentStart",
+        "SubagentStop", "PreCompact", "PostCompact", "CwdChanged", "FileChanged", "PreModelSwitch",
+        "PostModelSwitch", "MessageDisplay",
+    ]
+    static let copilotDocumentedEvents = [
+        "sessionStart", "sessionEnd", "userPromptSubmitted", "userPromptTransformed", "preToolUse", "postToolUse",
+        "postToolUseFailure", "agentStop", "subagentStart", "subagentStop", "errorOccurred", "preCompact",
+        "permissionRequest", "notification",
+    ]
+
+    static func parserMaps(_ event: String) -> Bool {
+        let notificationTypes: [String?] = [nil, "permission_prompt", "idle_prompt", "elicitation_dialog"]
+        let tools: [String?] = [nil, "Bash", "AskUserQuestion", "ExitPlanMode"]
+        return notificationTypes.contains { type in
+            tools.contains { SessionStateParser.activity(forEvent: event, notificationType: type, toolName: $0) != nil }
+        }
+    }
+
+    @Test("Every Claude Code event the parser understands is installed")
+    func claudeInstallCoversParser() {
+        let installed = Set(HookConfig.claudeEvents.map(\.event))
+        let mapped = Self.claudeDocumentedEvents.filter(Self.parserMaps)
+        #expect(Set(mapped).isSubset(of: installed), "not installed: \(Set(mapped).subtracting(installed))")
+        #expect(installed.contains("StopFailure") && installed.contains("PostToolUseFailure"))
+    }
+
+    @Test("Every Copilot CLI event the parser understands is installed, except the documented exclusions")
+    func copilotInstallCoversParser() {
+        let installed = Set(HookConfig.copilotEvents)
+        let mapped = Set(Self.copilotDocumentedEvents.filter(Self.parserMaps)).subtracting(HookConfig.copilotEventsLeftOut)
+        #expect(mapped.isSubset(of: installed), "not installed: \(mapped.subtracting(installed))")
+    }
+
     @Test("Merging keeps unrelated settings and other hooks, and is idempotent")
     func mergeIdempotent() throws {
         let existing: [String: Any] = [

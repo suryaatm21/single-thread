@@ -13,22 +13,31 @@ public enum HookConfig {
     /// - PermissionRequest fires the moment a permission or plan-approval
     ///   dialog opens; the `permission_prompt` notification waits ~6 seconds.
     /// - PreToolUse is limited to the question and plan tools.
-    /// - PostToolUse flips the session back to working after an approval.
+    /// - PostToolUse (and PostToolUseFailure) flip the session back to
+    ///   working after an approval.
+    /// - StopFailure ends a turn on an API error; the agent is idle either way.
     public static let claudeEvents: [(event: String, matcher: String?)] = [
         ("SessionStart", nil),
         ("UserPromptSubmit", nil),
         ("PreToolUse", "AskUserQuestion|ExitPlanMode"),
         ("PermissionRequest", nil),
         ("PostToolUse", nil),
+        ("PostToolUseFailure", nil),
         ("Notification", nil),
         ("Stop", nil),
+        ("StopFailure", nil),
         ("SessionEnd", nil),
     ]
 
     /// Copilot CLI events (camelCase names from its hooks reference).
+    /// `preToolUse` and `permissionRequest` are left out on purpose:
+    /// Copilot's `permissionRequest` fires before its permission rules run,
+    /// including for requests that never reach the user.
     public static let copilotEvents = [
-        "sessionStart", "userPromptSubmitted", "postToolUse", "notification", "agentStop", "sessionEnd",
+        "sessionStart", "userPromptSubmitted", "postToolUse", "postToolUseFailure", "notification", "agentStop",
+        "sessionEnd",
     ]
+    public static let copilotEventsLeftOut: Set<String> = ["preToolUse", "permissionRequest"]
 
     public static let timeoutSeconds = 5
 

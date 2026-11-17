@@ -119,6 +119,31 @@ struct SessionMatcherTests {
         #expect(result.unmatched.count == 1)
     }
 
+    @Test("A session tied between two windows matches neither")
+    func tiedWindows() {
+        // The agent's window and a plain shell, both in the same project folder.
+        let sessions = [Self.session("agent", cwd: "/Users/dev/code/api")]
+        let windows = [
+            Self.window(1, title: "zsh", doc: "/Users/dev/code/api"),
+            Self.window(2, title: "zsh", doc: "/Users/dev/code/api"),
+        ]
+        let result = match(sessions, windows)
+        #expect(result.sessionsByWindow.isEmpty)
+        #expect(result.unmatched.map(\.sessionID) == ["agent"])
+        // Order does not matter: the frontmost window does not win the tie.
+        #expect(match(sessions, windows.reversed()).sessionsByWindow.isEmpty)
+    }
+
+    @Test("Extra evidence breaks a tie")
+    func tieBroken() {
+        let sessions = [Self.session("agent", cwd: "/Users/dev/code/api")]
+        let windows = [
+            Self.window(1, title: "zsh", doc: "/Users/dev/code/api"),
+            Self.window(2, title: "✳ Fix tests — api — claude", doc: "/Users/dev/code/api"),
+        ]
+        #expect(match(sessions, windows).sessionsByWindow[2]?.sessionID == "agent")
+    }
+
     @Test("Each window gets at most one session; the newest wins a tie")
     func oneToOne() {
         let sessions = [

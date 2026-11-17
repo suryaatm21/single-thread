@@ -33,6 +33,35 @@ struct OverlayPlanningTests {
         #expect(FocusResolver.clearWindowID(frontToBack: windows, frontmostPID: 99, previousClear: 42, keepLastAgentWindowClear: true) == nil)
     }
 
+    @Test("The clear window counts as looked at only while its app is frontmost")
+    func lookedAt() {
+        let windows = [Self.window(5, pid: 2), Self.window(7, pid: 1)]
+        #expect(FocusResolver.lookedAtWindowID(clearWindowID: 7, frontToBack: windows, frontmostPID: 1) == 7)
+        // Kept clear while a browser (pid 99) has focus: not looked at.
+        #expect(FocusResolver.lookedAtWindowID(clearWindowID: 7, frontToBack: windows, frontmostPID: 99) == nil)
+        #expect(FocusResolver.lookedAtWindowID(clearWindowID: nil, frontToBack: windows, frontmostPID: 1) == nil)
+        #expect(FocusResolver.lookedAtWindowID(clearWindowID: 7, frontToBack: windows, frontmostPID: nil) == nil)
+    }
+
+    @Test("A turn that finishes while you are in the browser is flagged on the kept-clear window")
+    func keptClearWindowGetsFlagged() {
+        let terminal = Self.window(7, pid: 1)
+        let browserPID: Int32 = 99
+        let clear = FocusResolver.clearWindowID(frontToBack: [terminal], frontmostPID: browserPID,
+                                                previousClear: 7, keepLastAgentWindowClear: true)
+        #expect(clear == 7)
+        let lookedAt = FocusResolver.lookedAtWindowID(clearWindowID: clear, frontToBack: [terminal], frontmostPID: browserPID)
+        let finished = Self.session("s", activity: .finished)
+        var tracker = AttentionTracker()
+        let flagged = tracker.update(sessions: [finished], focusedSessionIDs: lookedAt == 7 ? [finished.id] : [])
+        #expect(flagged == [finished.id])
+
+        let specs = OverlayPlanner.plan(windows: [terminal], clearWindowID: clear, preferences: Preferences(),
+                                        sessionsByWindow: [7: finished], attentionSessionIDs: flagged)
+        // Border only: the window stays readable.
+        #expect(specs == [OverlaySpec(windowID: 7, frame: terminal.frame, style: .borderOnly, label: nil, needsAttention: true)])
+    }
+
     // MARK: Planning
 
     @Test("Every supported window except the clear one gets an overlay")

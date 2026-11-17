@@ -24,6 +24,21 @@ public enum FocusResolver {
         }
         return nil
     }
+
+    /// The window the developer is looking at: the clear window, but only
+    /// while its app is frontmost. A window kept clear while a browser has
+    /// focus is not being looked at, so its agent can still be flagged.
+    public static func lookedAtWindowID(
+        clearWindowID: UInt32?,
+        frontToBack windows: [WindowInfo],
+        frontmostPID: Int32?
+    ) -> UInt32? {
+        guard let clearWindowID, let frontmostPID,
+              let window = windows.first(where: { $0.id == clearWindowID }),
+              window.pid == frontmostPID
+        else { return nil }
+        return clearWindowID
+    }
 }
 
 /// Everything needed to draw one overlay.
@@ -58,13 +73,18 @@ public enum OverlayPlanner {
         guard preferences.enabled else { return [] }
         let style = preferences.mode.style
         return windows.compactMap { window in
-            guard window.id != clearWindowID,
-                  preferences.isSupported(bundleID: window.bundleID),
+            guard preferences.isSupported(bundleID: window.bundleID),
                   window.frame.width >= minimumWindowSize.width,
                   window.frame.height >= minimumWindowSize.height
             else { return nil }
             let session = sessionsByWindow[window.id]
             let attention = session.map { attentionSessionIDs.contains($0.id) } ?? false
+            if window.id == clearWindowID {
+                // The clear window stays readable. It only gets the amber
+                // border, when its agent needs you while you are in another app.
+                guard attention else { return nil }
+                return OverlaySpec(windowID: window.id, frame: window.frame, style: .borderOnly, label: nil, needsAttention: true)
+            }
             // The needs-you flag shows in every mode; otherwise the label follows the mode.
             let label = (style.showLabel || attention)
                 ? LabelFormatter.label(for: window, session: session, needsAttention: attention)
@@ -84,7 +104,8 @@ public struct AttentionTracker: Sendable {
 
     public init() {}
 
-    /// - Parameter focusedSessionIDs: sessions whose window is currently clear.
+    /// - Parameter focusedSessionIDs: sessions whose window the developer is
+    ///   looking at (see `FocusResolver.lookedAtWindowID`).
     /// - Returns: IDs of sessions to flag.
     public mutating func update(sessions: [AgentSession], focusedSessionIDs: Set<String>) -> Set<String> {
         var flagged = Set<String>()

@@ -101,7 +101,8 @@ final class FocusEngine {
         let sessions = sessionStore.sessions
         let match = SessionMatcher.match(sessions: sessions, windows: scan.windows)
         var focusedSessions = Set<String>()
-        if let clear, let session = match.sessionsByWindow[clear] { focusedSessions.insert(session.id) }
+        let lookedAt = FocusResolver.lookedAtWindowID(clearWindowID: clear, frontToBack: scan.windows, frontmostPID: frontPID)
+        if let lookedAt, let session = match.sessionsByWindow[lookedAt] { focusedSessions.insert(session.id) }
         let flagged = attention.update(sessions: sessions, focusedSessionIDs: focusedSessions)
 
         let specs = OverlayPlanner.plan(

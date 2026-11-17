@@ -53,7 +53,22 @@ public enum SessionMatcher {
                 if s >= minimumScore { candidates.append(Candidate(score: s, session: session, window: window)) }
             }
         }
-        // Highest score first; on ties prefer the most recently active session.
+        // A session whose two best windows score the same is ambiguous (say,
+        // the agent's window and a plain shell in the same folder). Guessing
+        // would let the flag follow whichever window is in front, and focusing
+        // the wrong one would clear it, so such a session stays unmatched.
+        var bestTwo: [String: [Int]] = [:]
+        for candidate in candidates {
+            var scores = bestTwo[candidate.session.id, default: []]
+            scores.append(candidate.score)
+            scores.sort(by: >)
+            bestTwo[candidate.session.id] = Array(scores.prefix(2))
+        }
+        let ambiguous = Set(bestTwo.filter { $0.value.count == 2 && $0.value[0] == $0.value[1] }.keys)
+        candidates.removeAll { ambiguous.contains($0.session.id) }
+
+        // Highest score first; on ties between sessions for one window, prefer
+        // the most recently active session.
         candidates.sort {
             if $0.score != $1.score { return $0.score > $1.score }
             return $0.session.updatedAt > $1.session.updatedAt

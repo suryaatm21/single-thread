@@ -42,6 +42,9 @@ public struct OverlayStyle: Equatable, Sendable {
         self.blur = blur
         self.showLabel = showLabel
     }
+
+    /// Nothing but the needs-you border, for a window that stays readable.
+    public static let borderOnly = OverlayStyle(dimAlpha: 0, blur: false, showLabel: false)
 }
 
 /// A terminal or agent app whose windows get overlays.

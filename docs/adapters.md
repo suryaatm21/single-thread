@@ -20,9 +20,10 @@ Source: [Hooks reference](https://code.claude.com/docs/en/hooks), [Hooks guide](
 | `UserPromptSubmit` | | working |
 | `PreToolUse` | `AskUserQuestion\|ExitPlanMode` | question, or plan ready for review |
 | `PermissionRequest` | | needs permission (plan ready for review for `ExitPlanMode`) |
-| `PostToolUse` | | working (clears a permission flag once the tool ran) |
+| `PostToolUse`, `PostToolUseFailure` | | working (clears a permission flag once the tool ran) |
 | `Notification` | | `permission_prompt` needs permission, `elicitation_dialog` question, `idle_prompt` turn finished; other types ignored |
 | `Stop` | | turn finished |
+| `StopFailure` | | turn finished (the turn ended on an API error) |
 | `SessionEnd` | | state file deleted |
 
 Why these events:
@@ -64,7 +65,7 @@ What the docs say:
 |---|---|
 | `sessionStart` | ready |
 | `userPromptSubmitted` | working |
-| `postToolUse` | working |
+| `postToolUse`, `postToolUseFailure` | working |
 | `notification` | `permission_prompt` needs permission, `elicitation_dialog` question; other types ignored |
 | `agentStop` | turn finished |
 | `sessionEnd` | state file deleted |
