@@ -193,6 +193,36 @@ struct HookScriptTests {
         #expect(run.files.map(\.lastPathComponent) == ["s1.ended"])
     }
 
+    @Test("A reminder notification keeps the wait number; a new request after the tool ran gets a new one")
+    func waitNumbers() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("claude-code-s1.json")
+        func state() throws -> AgentSession { try #require(try SessionStateParser.parse(Data(contentsOf: file))) }
+
+        _ = try runHook(args: ["claude-code", "PermissionRequest"], payload: #"{"session_id":"s1","tool_name":"Bash"}"#, stateDir: dir)
+        let request = try state()
+        _ = try runHook(args: ["claude-code", "Notification"],
+                        payload: #"{"session_id":"s1","notification_type":"permission_prompt","message":"Claude needs your permission"}"#,
+                        stateDir: dir)
+        let reminder = try state()
+        #expect(request.wait != nil)
+        #expect(reminder.activity == .needsPermission)
+        #expect(reminder.wait == request.wait)
+
+        // You approve; the tool runs and the next request opens before the app reads the folder.
+        _ = try runHook(args: ["claude-code", "PostToolUse"], payload: #"{"session_id":"s1","tool_name":"Bash"}"#, stateDir: dir)
+        _ = try runHook(args: ["claude-code", "PermissionRequest"], payload: #"{"session_id":"s1","tool_name":"Bash"}"#, stateDir: dir)
+        let next = try state()
+        #expect(next.activity == .needsPermission)
+        #expect(next.wait != request.wait)
+
+        var tracker = AttentionTracker()
+        _ = tracker.update(sessions: [request], focusedSessionIDs: [request.id])
+        #expect(tracker.update(sessions: [reminder], focusedSessionIDs: []).isEmpty)
+        #expect(tracker.update(sessions: [next], focusedSessionIDs: []) == [next.id])
+    }
+
     @Test("A late Notification after SessionEnd stays cleared; a new SessionStart revives the id")
     func lateNotificationAfterEnd() throws {
         let dir = try tempDir()

@@ -4,7 +4,7 @@ single-thread flags a window when its agent needs you: a permission prompt, a qu
 
 When a session ends, the script deletes its state file and writes an empty `<session_id>.ended` marker in the same folder. A hook that was still running when the session ended sees the marker and writes nothing, so the session stays gone; `SessionStart` removes the marker. The app ignores ended sessions and deletes markers older than 24 hours.
 
-The script stores the session id, working directory, event name, notification type and message, tool name, tty, agent PID, and the app that launched the terminal (`__CFBundleIdentifier`). It does not store prompts, replies, or tool input. It prints nothing and exits 0 on every path, so it cannot block or alter the agent.
+The script stores the session id, working directory, event name, notification type and message, tool name, tty, agent PID, the app that launched the terminal (`__CFBundleIdentifier`), and a wait number. Every event except a notification raises the wait number, so the app can tell a new wait from one you already looked at even if it never read the events in between. It does not store prompts, replies, or tool input. It prints nothing and exits 0 on every path, so it cannot block or alter the agent.
 
 | Agent | Mechanism | Status |
 |---|---|---|

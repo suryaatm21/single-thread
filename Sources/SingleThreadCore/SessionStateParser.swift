@@ -8,7 +8,7 @@ import Foundation
 ///     {"v":1,"agent":"claude-code","event":"PermissionRequest","ts":1794906153,
 ///      "session_id":"…","cwd":"/path/to/project","tty":"ttys003","pid":4242,
 ///      "host_bundle_id":"com.apple.Terminal","term_program":"Apple_Terminal",
-///      "tmux":false,"notification_type":"","tool_name":"Bash","message":""}
+///      "tmux":false,"notification_type":"","tool_name":"Bash","message":"","wait":3}
 public enum SessionStateParser {
     public enum ParseError: Error, Equatable {
         case invalidJSON
@@ -31,6 +31,7 @@ public enum SessionStateParser {
         var notification_type: String?
         var tool_name: String?
         var message: String?
+        var wait: Int?
     }
 
     /// Returns the session described by `data`, or nil when the event carries
@@ -66,6 +67,7 @@ public enum SessionStateParser {
             insideTmux: raw.tmux ?? false,
             toolName: tool,
             message: raw.message.nonEmpty,
+            wait: raw.wait,
             updatedAt: Date(timeIntervalSince1970: ts)
         )
     }

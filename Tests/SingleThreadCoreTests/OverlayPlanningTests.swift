@@ -11,9 +11,10 @@ struct OverlayPlanningTests {
                    frame: CGRect(origin: CGPoint(x: Int(id) * 10, y: 50), size: size))
     }
 
-    static func session(_ id: String, activity: AgentActivity, cwd: String = "/w/api", tool: String? = nil) -> AgentSession {
+    static func session(_ id: String, activity: AgentActivity, cwd: String = "/w/api", tool: String? = nil,
+                        wait: Int? = nil) -> AgentSession {
         AgentSession(sessionID: id, agent: .claudeCode, event: "x", activity: activity, cwd: cwd,
-                     toolName: tool, updatedAt: Date(timeIntervalSince1970: 1))
+                     toolName: tool, wait: wait, updatedAt: Date(timeIntervalSince1970: 1))
     }
 
     // MARK: Focus
@@ -178,6 +179,28 @@ struct OverlayPlanningTests {
         #expect(tracker.update(sessions: [session], focusedSessionIDs: []).isEmpty)
         session.activity = .finished
         #expect(tracker.update(sessions: [session], focusedSessionIDs: []) == [session.id])
+    }
+
+    @Test("A new wait of the same kind is flagged even when the working state between was never read")
+    func attentionSkippedWorkingState() {
+        var tracker = AttentionTracker()
+        // You look at the first permission request, approve it, and switch away.
+        let first = Self.session("a", activity: .needsPermission, wait: 1)
+        #expect(tracker.update(sessions: [first], focusedSessionIDs: [first.id]).isEmpty)
+        // The hook wrote PostToolUse (wait 2) and the next PermissionRequest (wait 3)
+        // before the app read the folder again, so it never saw the working state.
+        let second = Self.session("a", activity: .needsPermission, wait: 3)
+        #expect(tracker.update(sessions: [second], focusedSessionIDs: []) == [second.id])
+    }
+
+    @Test("A notification repeating the wait you looked at keeps it acknowledged")
+    func attentionRepeatedWait() {
+        var tracker = AttentionTracker()
+        let request = Self.session("a", activity: .needsPermission, wait: 4)
+        _ = tracker.update(sessions: [request], focusedSessionIDs: [request.id])
+        // Claude Code's permission_prompt notification arrives later for the same request.
+        let reminder = Self.session("a", activity: .needsPermission, wait: 4)
+        #expect(tracker.update(sessions: [reminder], focusedSessionIDs: []).isEmpty)
     }
 
     @Test("Working and ready sessions are never flagged")

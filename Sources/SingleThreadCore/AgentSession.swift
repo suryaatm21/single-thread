@@ -54,6 +54,10 @@ public struct AgentSession: Equatable, Sendable {
     public var insideTmux: Bool
     public var toolName: String?
     public var message: String?
+    /// Which wait this state belongs to. The hook bumps it on every event except
+    /// a Notification, which repeats the wait already reported. Nil in files
+    /// written before the hook recorded it.
+    public var wait: Int?
     public var updatedAt: Date
 
     public init(
@@ -69,6 +73,7 @@ public struct AgentSession: Equatable, Sendable {
         insideTmux: Bool = false,
         toolName: String? = nil,
         message: String? = nil,
+        wait: Int? = nil,
         updatedAt: Date
     ) {
         self.sessionID = sessionID
@@ -83,6 +88,7 @@ public struct AgentSession: Equatable, Sendable {
         self.insideTmux = insideTmux
         self.toolName = toolName
         self.message = message
+        self.wait = wait
         self.updatedAt = updatedAt
     }
 

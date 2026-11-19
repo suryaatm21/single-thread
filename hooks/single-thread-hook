@@ -9,7 +9,8 @@
 # Writes one small JSON file per session into $SINGLE_THREAD_STATE_DIR
 # (default: ~/Library/Application Support/single-thread/sessions).
 # It stores the session id, working directory, event, notification type and
-# message, tool name, tty, agent PID, and the app that launched the terminal.
+# message, tool name, tty, agent PID, the app that launched the terminal, and
+# a wait number that tells one wait from the next.
 # On SessionEnd it deletes that file and leaves an empty <session_id>.ended
 # marker, so a late hook from the dead session cannot bring it back.
 # It never stores your prompts or the agent's replies.
@@ -121,12 +122,29 @@ done
 
 if [ -n "${TMUX:-}" ]; then in_tmux=true; else in_tmux=false; fi
 
+# Which wait this state belongs to. A Notification repeats a wait an earlier
+# event already reported (permission_prompt after PermissionRequest, idle_prompt
+# after Stop), so it keeps the number; every other event moves it on. The app
+# compares it to tell a new wait from one you already looked at, even when it
+# never read the events in between.
+wait=0
+if previous="$(/usr/bin/plutil -extract wait raw -o - "$state_file" 2>/dev/null)"; then
+  case "$previous" in
+    '' | *[!0-9]*) ;;
+    *) wait="$previous" ;;
+  esac
+fi
+case "$event" in
+  Notification | notification) ;;
+  *) wait=$((wait + 1)) ;;
+esac
+
 mkdir -p "$state_dir" 2>/dev/null || exit 0
 tmp="$state_dir/.$agent-$safe_id.$$.tmp"
-printf '{"v":1,"agent":"%s","event":"%s","ts":%s,"session_id":"%s","cwd":"%s","tty":"%s","pid":%s,"host_bundle_id":"%s","term_program":"%s","tmux":%s,"notification_type":"%s","tool_name":"%s","message":"%s"}\n' \
+printf '{"v":1,"agent":"%s","event":"%s","ts":%s,"session_id":"%s","cwd":"%s","tty":"%s","pid":%s,"host_bundle_id":"%s","term_program":"%s","tmux":%s,"notification_type":"%s","tool_name":"%s","message":"%s","wait":%s}\n' \
   "$(json "$agent")" "$(json "$event")" "$(date +%s)" "$(json "$session_id")" "$(json "$cwd")" \
   "$(json "$tty")" "${agent_pid:-0}" "$(json "${__CFBundleIdentifier:-}")" "$(json "${TERM_PROGRAM:-}")" \
-  "$in_tmux" "$(json "$notification_type")" "$(json "$tool_name")" "$(json "$message")" \
+  "$in_tmux" "$(json "$notification_type")" "$(json "$tool_name")" "$(json "$message")" "$wait" \
   >"$tmp" 2>/dev/null && mv -f "$tmp" "$state_file" 2>/dev/null
 rm -f "$tmp" 2>/dev/null
 exit 0

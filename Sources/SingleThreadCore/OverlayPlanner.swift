@@ -99,8 +99,17 @@ public enum OverlayPlanner {
 /// A session is flagged while its agent needs input and nobody has looked at
 /// it yet. Focusing its window counts as looking; the flag then stays off
 /// until the agent's state changes again.
+///
+/// The tracker remembers which wait you looked at by its activity and the
+/// hook's `wait` number, so a new wait of the same kind is flagged even when
+/// the app never read the working state in between.
 public struct AttentionTracker: Sendable {
-    public private(set) var acknowledged: [String: AgentActivity] = [:]
+    public struct Acknowledgement: Equatable, Sendable {
+        public var activity: AgentActivity
+        public var wait: Int?
+    }
+
+    public private(set) var acknowledged: [String: Acknowledgement] = [:]
 
     public init() {}
 
@@ -113,8 +122,8 @@ public struct AttentionTracker: Sendable {
             if !session.activity.needsInput {
                 acknowledged[session.id] = nil
             } else if focusedSessionIDs.contains(session.id) {
-                acknowledged[session.id] = session.activity
-            } else if acknowledged[session.id] != session.activity {
+                acknowledged[session.id] = Acknowledgement(activity: session.activity, wait: session.wait)
+            } else if acknowledged[session.id] != Acknowledgement(activity: session.activity, wait: session.wait) {
                 flagged.insert(session.id)
             }
         }

@@ -64,7 +64,7 @@ terminal windows ──▶ window list + Accessibility ──▶ match session �
 ```
 
 1. Claude Code runs `hooks/single-thread-hook` on `PermissionRequest`, `PreToolUse` (questions and plans), `Notification`, `Stop`, `StopFailure`, `UserPromptSubmit`, `PostToolUse`, `PostToolUseFailure`, `SessionStart` and `SessionEnd`.
-2. The script writes the session's latest state to one JSON file: session id, working directory, event, tty, agent PID, and the app that launched the terminal. It never stores prompts or replies.
+2. The script writes the session's latest state to one JSON file: session id, working directory, event, tty, agent PID, the app that launched the terminal, and a wait number that tells one wait from the next. It never stores prompts or replies.
 3. The app matches each session to a window. It scores the launching app, the working directory a terminal window reports through Accessibility (when it reports one), and the project name in the window title. The hook also records the session's tty. The matcher can use it, but the app does not yet read which ttys each window shows; that needs AppleScript access to Terminal and iTerm2 (Automation permission) and is a follow-up.
 4. A session that needs input gets an amber border and a *Needs you* line on its overlay. Working in that window, with its app in front, clears the flag. A window kept clear while you read in a browser does not count: if its agent finishes then, the window gets the amber border without the blur. The flag returns when the agent needs you for something new.
 
