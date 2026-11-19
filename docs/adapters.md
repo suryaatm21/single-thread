@@ -42,7 +42,7 @@ build/SingleThread.app/Contents/MacOS/SingleThread install-hooks claude \
   --settings /path/to/project/.claude/settings.local.json
 ```
 
-`--print` prints the `hooks` block instead. The installer merges into the file, keeps your other hooks, saves a `.bak`, and gives the same result when you run it twice. `uninstall-hooks claude --settings <path>` removes only single-thread's entries. To cover every project, point `--settings` at `~/.claude/settings.json` yourself. The tool never writes a file you did not name.
+`--print` prints the `hooks` block instead. The installer merges into the file, keeps your other hooks, saves a `.bak`, and gives the same result when you run it twice. `uninstall-hooks claude --settings <path>` removes only single-thread's entries. It finds them by the `# single-thread-hook` comment at the end of each installed command, so this also works for a script you name with `--hook-script`. To cover every project, point `--settings` at `~/.claude/settings.json` yourself. The tool never writes a file you did not name.
 
 ## GitHub Copilot CLI
 

@@ -11,7 +11,7 @@ struct HookConfigTests {
         #expect(HookConfig.shellQuote("/a b/c") == "'/a b/c'")
         #expect(HookConfig.shellQuote("it's") == #"'it'\''s'"#)
         #expect(HookConfig.command(scriptPath: script, agent: "claude-code", event: "Stop")
-            == "'/opt/single thread/hooks/single-thread-hook' claude-code Stop")
+            == "'/opt/single thread/hooks/single-thread-hook' claude-code Stop # single-thread-hook")
     }
 
     @Test("Claude hooks cover every needs-input event")
@@ -25,7 +25,7 @@ struct HookConfigTests {
         #expect(pre["matcher"] as? String == "AskUserQuestion|ExitPlanMode")
         let handler = try #require((pre["hooks"] as? [[String: Any]])?.first)
         #expect(handler["type"] as? String == "command")
-        #expect((handler["command"] as? String)?.hasSuffix("claude-code PreToolUse") == true)
+        #expect((handler["command"] as? String)?.hasSuffix("claude-code PreToolUse # single-thread-hook") == true)
     }
 
     /// Every hook event name each agent documents. If the parser turns one of
@@ -100,6 +100,29 @@ struct HookConfigTests {
         #expect(HookConfig.removeClaudeHooks(from: ours).isEmpty)
     }
 
+    @Test("A script with any file name is replaced on reinstall and taken out on uninstall")
+    func customScriptName() throws {
+        let custom = "/opt/hooks/report-state.sh"
+        let existing: [String: Any] = [
+            "hooks": ["Stop": [["hooks": [["type": "command", "command": "say done"]]]]],
+        ]
+        let twice = HookConfig.mergeClaudeHooks(into: HookConfig.mergeClaudeHooks(into: existing, scriptPath: custom),
+                                                scriptPath: custom)
+        let hooks = try #require(twice["hooks"] as? [String: Any])
+        for (event, _) in HookConfig.claudeEvents {
+            let groups = try #require(hooks[event] as? [[String: Any]])
+            let commands = groups.flatMap { ($0["hooks"] as? [[String: Any]]) ?? [] }.compactMap { $0["command"] as? String }
+            #expect(commands.filter { $0.contains(custom) }.count == 1, "\(event): \(commands)")
+        }
+        // Moving to the bundled script replaces the custom one instead of adding to it.
+        let moved = HookConfig.mergeClaudeHooks(into: twice, scriptPath: script)
+        let stopCommands = ((moved["hooks"] as? [String: Any])?["Stop"] as? [[String: Any]] ?? [])
+            .flatMap { ($0["hooks"] as? [[String: Any]]) ?? [] }.compactMap { $0["command"] as? String }
+        #expect(stopCommands.filter { $0.contains(custom) }.isEmpty)
+        #expect(stopCommands.contains("say done"))
+        #expect(try HookConfig.jsonData(HookConfig.removeClaudeHooks(from: twice)) == HookConfig.jsonData(existing))
+    }
+
     @Test("Copilot hooks file uses the documented shape")
     func copilotFile() throws {
         let file = HookConfig.copilotHooksFile(scriptPath: script)
@@ -108,7 +131,7 @@ struct HookConfigTests {
         #expect(Set(hooks.keys) == Set(HookConfig.copilotEvents))
         let stop = try #require((hooks["agentStop"] as? [[String: Any]])?.first)
         #expect(stop["type"] as? String == "command")
-        #expect((stop["bash"] as? String)?.hasSuffix("copilot-cli agentStop") == true)
+        #expect((stop["bash"] as? String)?.hasSuffix("copilot-cli agentStop # single-thread-hook") == true)
         #expect(stop["timeoutSec"] as? Int == HookConfig.timeoutSeconds)
     }
 }
@@ -221,6 +244,39 @@ struct HookScriptTests {
         _ = tracker.update(sessions: [request], focusedSessionIDs: [request.id])
         #expect(tracker.update(sessions: [reminder], focusedSessionIDs: []).isEmpty)
         #expect(tracker.update(sessions: [next], focusedSessionIDs: []) == [next.id])
+    }
+
+    @Test("An installed command runs through the shell, even for a renamed script in a folder with # in its name")
+    func installedCommandRuns() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let folder = dir.appendingPathComponent("my hooks #1")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let copy = folder.appendingPathComponent("report-state.sh")
+        try FileManager.default.copyItem(at: Self.scriptURL, to: copy)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: copy.path)
+        let stateDir = dir.appendingPathComponent("state")
+
+        let command = HookConfig.command(scriptPath: copy.path, agent: "claude-code", event: "Stop")
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", command]
+        var env = ProcessInfo.processInfo.environment
+        env["SINGLE_THREAD_STATE_DIR"] = stateDir.path
+        env["COPILOT_HOOK_DEPTH"] = nil
+        process.environment = env
+        let input = Pipe()
+        process.standardInput = input
+        try process.run()
+        input.fileHandleForWriting.write(Data(#"{"session_id":"s1","cwd":"/w"}"#.utf8))
+        try input.fileHandleForWriting.close()
+        process.waitUntilExit()
+
+        #expect(process.terminationStatus == 0)
+        let data = try Data(contentsOf: stateDir.appendingPathComponent("claude-code-s1.json"))
+        let session = try #require(try SessionStateParser.parse(data))
+        #expect(session.event == "Stop")
+        #expect(session.activity == .finished)
     }
 
     @Test("A late Notification after SessionEnd stays cleared; a new SessionStart revives the id")

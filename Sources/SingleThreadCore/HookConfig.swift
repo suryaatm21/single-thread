@@ -4,8 +4,9 @@ import Foundation
 /// `single-thread-hook`. Pure functions over JSON dictionaries; the CLI does
 /// the file reading and writing.
 public enum HookConfig {
-    /// Every command we install contains this, which is how re-installs and
-    /// uninstalls find our entries without touching anyone else's.
+    /// Every command we install ends with a shell comment naming this, which is
+    /// how re-installs and uninstalls find our entries without touching anyone
+    /// else's, whatever the script file is called.
     public static let marker = "single-thread-hook"
 
     /// Claude Code events we listen to, with an optional matcher.
@@ -46,8 +47,10 @@ public enum HookConfig {
         "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
+    /// Both agents run the command through a shell, so the trailing comment is
+    /// ignored at run time. The quoted path keeps any `#` inside it literal.
     public static func command(scriptPath: String, agent: String, event: String) -> String {
-        "\(shellQuote(scriptPath)) \(agent) \(event)"
+        "\(shellQuote(scriptPath)) \(agent) \(event) # \(marker)"
     }
 
     /// The value of the `hooks` key for a Claude Code settings file.
